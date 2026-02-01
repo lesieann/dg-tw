@@ -2,8 +2,11 @@ name: Update Exchange Rate
 
 on:
   schedule:
-    - cron: '0 * * * *' # 每小時執行一次
-  workflow_dispatch:      # 允許手動點擊執行
+    - cron: '0 * * * *'
+  workflow_dispatch: 
+
+permissions:
+  contents: write # 強制給予寫入權限
 
 jobs:
   build:
@@ -18,12 +21,12 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: pip install requests pandas
+        run: pip install requests pandas pytz
 
       - name: Run scraper
         run: python update_rate.py
 
-      - name: Commit and push if changed
+      - name: Commit and push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
