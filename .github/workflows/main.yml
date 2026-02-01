@@ -1,32 +1,23 @@
 name: Update Exchange Rate
-
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 * * * *'
-  workflow_dispatch: 
-
 permissions:
-  contents: write # 強制給予寫入權限
-
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
-      - name: Install dependencies
+      - name: Install
         run: pip install requests pandas pytz
-
-      - name: Run scraper
+      - name: Run
         run: python update_rate.py
-
-      - name: Commit and push
+      - name: Push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
