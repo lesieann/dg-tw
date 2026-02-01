@@ -1,4 +1,5 @@
- <!DOCTYPE html>
+
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -14,11 +15,13 @@
         
         <div class="space-y-4">
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">台銀中間匯率 (自動更新)</label>
+                <label class="block text-sm font-medium text-slate-500 mb-1">台銀中間匯率</label>
                 <div id="rate-display" class="text-2xl font-mono font-bold text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
                     載入中...
                 </div>
-                <p id="time-display" class="text-xs text-slate-400 mt-1 italic"></p>
+                <p id="time-display" class="text-[10px] text-slate-400 mt-1 italic"></p>
+                <!-- 除錯資訊欄位 -->
+                <p id="debug-info" class="text-[10px] text-red-400 mt-1"></p>
             </div>
 
             <div>
@@ -42,20 +45,31 @@
         let currentRate = 0;
 
         async function init() {
+            // 取得目前網頁的基礎路徑，防止 GitHub Pages 路徑錯誤
+            const jsonUrl = window.location.pathname.split('/').slice(0, -1).join('/') + '/rate.json';
+            
             try {
-                // 讀取 GitHub 產出的 rate.json (路徑加上時間戳防快取)
-                const res = await fetch('./rate.json?t=' + new Date().getTime());
-                const data = await res.json();
+                // 強制加上時間戳記防止瀏覽器快取舊資料
+                const response = await fetch(`rate.json?t=${new Date().getTime()}`);
                 
-                currentRate = data.rate;
-                document.getElementById('rate-display').innerText = currentRate.toFixed(4);
-                document.getElementById('time-display').innerText = '最後更新日期：' + data.time;
+                if (!response.ok) {
+                    throw new Error(`網頁讀取不到 rate.json (狀態碼: ${response.status})`);
+                }
+
+                const data = await response.json();
                 
-                // 監聽輸入
-                document.getElementById('input-price').addEventListener('input', calculate);
+                if (data.rate) {
+                    currentRate = data.rate;
+                    document.getElementById('rate-display').innerText = currentRate.toFixed(4);
+                    document.getElementById('time-display').innerText = '最後更新日期：' + data.time;
+                    document.getElementById('debug-info').innerText = ''; // 清除錯誤訊息
+                } else {
+                    throw new Error("JSON 格式不正確");
+                }
             } catch (e) {
+                console.error(e);
                 document.getElementById('rate-display').innerText = '讀取失敗';
-                document.getElementById('rate-display').classList.replace('text-blue-600', 'text-red-500');
+                document.getElementById('debug-info').innerText = '錯誤回報: ' + e.message;
             }
         }
 
@@ -69,6 +83,7 @@
             }
         }
 
+        document.getElementById('input-price').addEventListener('input', calculate);
         init();
     </script>
 </body>
