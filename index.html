@@ -1,0 +1,75 @@
+ <!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人民幣報價系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
+        <h1 class="text-2xl font-black mb-6 text-slate-800 flex items-center gap-2">
+            <span class="bg-red-500 text-white px-2 py-1 rounded">CNY</span> 報價系統
+        </h1>
+        
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">台銀中間匯率 (自動更新)</label>
+                <div id="rate-display" class="text-2xl font-mono font-bold text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                    載入中...
+                </div>
+                <p id="time-display" class="text-xs text-slate-400 mt-1 italic"></p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-500 mb-1">輸入人民幣金額 (CNY)</label>
+                <input type="number" id="input-price" step="any"
+                    class="w-full px-4 py-3 text-lg border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none transition-all"
+                    placeholder="0.00">
+            </div>
+
+            <div class="pt-4 border-t border-dashed border-slate-200">
+                <label class="block text-sm font-medium text-slate-500 mb-1">計算結果 (TWD)</label>
+                <div id="result" class="text-4xl font-black text-red-500">
+                    $ 0.00
+                </div>
+                <p class="text-[10px] text-slate-400 mt-2 font-light">公式：(金額 × 中間匯率) - 0.5</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRate = 0;
+
+        async function init() {
+            try {
+                // 讀取 GitHub 產出的 rate.json (路徑加上時間戳防快取)
+                const res = await fetch('./rate.json?t=' + new Date().getTime());
+                const data = await res.json();
+                
+                currentRate = data.rate;
+                document.getElementById('rate-display').innerText = currentRate.toFixed(4);
+                document.getElementById('time-display').innerText = '最後更新日期：' + data.time;
+                
+                // 監聽輸入
+                document.getElementById('input-price').addEventListener('input', calculate);
+            } catch (e) {
+                document.getElementById('rate-display').innerText = '讀取失敗';
+                document.getElementById('rate-display').classList.replace('text-blue-600', 'text-red-500');
+            }
+        }
+
+        function calculate() {
+            const val = document.getElementById('input-price').value;
+            if (val && currentRate > 0) {
+                const res = (parseFloat(val) * currentRate) - 0.5;
+                document.getElementById('result').innerText = '$ ' + res.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            } else {
+                document.getElementById('result').innerText = '$ 0.00';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
