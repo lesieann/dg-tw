@@ -1,42 +1,49 @@
-
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>人民幣報價系統</title>
+    <title>人民幣報價系統 (無條件進位版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
     <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
         <h1 class="text-2xl font-black mb-6 text-slate-800 flex items-center gap-2">
-            <span class="bg-red-500 text-white px-2 py-1 rounded">CNY</span> 報價系統
+            <span class="bg-blue-600 text-white px-2 py-1 rounded">TWD</span> ➔ <span class="bg-red-500 text-white px-2 py-1 rounded">CNY</span>
         </h1>
         
         <div class="space-y-4">
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">台銀中間匯率</label>
+                <label class="block text-sm font-medium text-slate-500 mb-1">台銀當前中間匯率</label>
                 <div id="rate-display" class="text-2xl font-mono font-bold text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
                     載入中...
                 </div>
                 <p id="time-display" class="text-[10px] text-slate-400 mt-1 italic"></p>
-                <!-- 除錯資訊欄位 -->
-                <p id="debug-info" class="text-[10px] text-red-400 mt-1"></p>
+            </div>
+
+            <div class="bg-orange-50 p-3 rounded-lg border border-orange-100">
+                <label class="block text-xs font-bold text-orange-600 mb-1">計算使用匯率 (中間匯 - 0.5)</label>
+                <div id="adjusted-rate" class="text-xl font-mono font-bold text-orange-700">
+                    --
+                </div>
             </div>
 
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">輸入人民幣金額 (CNY)</label>
+                <label class="block text-sm font-medium text-slate-500 mb-1">輸入台幣金額 (TWD)</label>
                 <input type="number" id="input-price" step="any"
                     class="w-full px-4 py-3 text-lg border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none transition-all"
-                    placeholder="0.00">
+                    placeholder="請輸入台幣金額">
             </div>
 
             <div class="pt-4 border-t border-dashed border-slate-200">
-                <label class="block text-sm font-medium text-slate-500 mb-1">計算結果 (TWD)</label>
+                <label class="block text-sm font-medium text-slate-500 mb-1">計算報價結果 (人民幣 CNY)</label>
                 <div id="result" class="text-4xl font-black text-red-500">
-                    $ 0.00
+                    ¥ 0.00
                 </div>
-                <p class="text-[10px] text-slate-400 mt-2 font-light">公式：(金額 × 中間匯率) - 0.5</p>
+                <div class="mt-2 space-y-1">
+                    <p class="text-[10px] text-slate-400 font-light italic">公式：台幣金額 ÷ (中間匯率 - 0.5)</p>
+                    <p class="text-[10px] text-blue-500 font-bold italic">※ 結果已執行無條件進位至小數點第二位</p>
+                </div>
             </div>
         </div>
     </div>
@@ -45,41 +52,40 @@
         let currentRate = 0;
 
         async function init() {
-            // 取得目前網頁的基礎路徑，防止 GitHub Pages 路徑錯誤
-            const jsonUrl = window.location.pathname.split('/').slice(0, -1).join('/') + '/rate.json';
-            
             try {
-                // 強制加上時間戳記防止瀏覽器快取舊資料
                 const response = await fetch(`rate.json?t=${new Date().getTime()}`);
-                
-                if (!response.ok) {
-                    throw new Error(`網頁讀取不到 rate.json (狀態碼: ${response.status})`);
-                }
-
                 const data = await response.json();
                 
                 if (data.rate) {
                     currentRate = data.rate;
                     document.getElementById('rate-display').innerText = currentRate.toFixed(4);
-                    document.getElementById('time-display').innerText = '最後更新日期：' + data.time;
-                    document.getElementById('debug-info').innerText = ''; // 清除錯誤訊息
-                } else {
-                    throw new Error("JSON 格式不正確");
+                    
+                    const adjRate = currentRate - 0.5;
+                    document.getElementById('adjusted-rate').innerText = adjRate.toFixed(4);
+                    
+                    document.getElementById('time-display').innerText = '台銀數據同步時間：' + data.time;
                 }
             } catch (e) {
-                console.error(e);
                 document.getElementById('rate-display').innerText = '讀取失敗';
-                document.getElementById('debug-info').innerText = '錯誤回報: ' + e.message;
             }
         }
 
         function calculate() {
             const val = document.getElementById('input-price').value;
-            if (val && currentRate > 0) {
-                const res = (parseFloat(val) * currentRate) - 0.5;
-                document.getElementById('result').innerText = '$ ' + res.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            const adjustedRate = currentRate - 0.5;
+
+            if (val && adjustedRate > 0) {
+                // 1. 原始計算結果
+                const rawRes = parseFloat(val) / adjustedRate;
+                
+                // 2. 無條件進位至小數點第二位
+                // 邏輯：先乘100，進位後再除回100
+                const finalRes = Math.ceil(rawRes * 100) / 100;
+                
+                // 3. 格式化顯示 (強制顯示兩位小數，例如 25.00)
+                document.getElementById('result').innerText = '¥ ' + finalRes.toFixed(2);
             } else {
-                document.getElementById('result').innerText = '$ 0.00';
+                document.getElementById('result').innerText = '¥ 0.00';
             }
         }
 
