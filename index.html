@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>人民幣報價系統 (無條件進位版)</title>
+    <title>人民幣報價系統 (全球通用匯率)</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
@@ -14,7 +14,7 @@
         
         <div class="space-y-4">
             <div>
-                <label class="block text-sm font-medium text-slate-500 mb-1">台銀當前中間匯率</label>
+                <label class="block text-sm font-medium text-slate-500 mb-1">即時參考匯率 (1 CNY = ? TWD)</label>
                 <div id="rate-display" class="text-2xl font-mono font-bold text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
                     載入中...
                 </div>
@@ -22,7 +22,7 @@
             </div>
 
             <div class="bg-orange-50 p-3 rounded-lg border border-orange-100">
-                <label class="block text-xs font-bold text-orange-600 mb-1">計算使用匯率 (中間匯 - 0.5)</label>
+                <label class="block text-xs font-bold text-orange-600 mb-1">計算使用匯率 (匯率 - 0.5)</label>
                 <div id="adjusted-rate" class="text-xl font-mono font-bold text-orange-700">
                     --
                 </div>
@@ -41,8 +41,8 @@
                     ¥ 0.00
                 </div>
                 <div class="mt-2 space-y-1">
-                    <p class="text-[10px] text-slate-400 font-light italic">公式：台幣金額 ÷ (中間匯率 - 0.5)</p>
-                    <p class="text-[10px] text-blue-500 font-bold italic">※ 結果已執行無條件進位至小數點第二位</p>
+                    <p class="text-[10px] text-slate-400 font-light italic">公式：台幣金額 ÷ (匯率 - 0.5)</p>
+                    <p class="text-[10px] text-blue-500 font-bold italic">※ 無條件進位至小數點第二位</p>
                 </div>
             </div>
         </div>
@@ -63,7 +63,7 @@
                     const adjRate = currentRate - 0.5;
                     document.getElementById('adjusted-rate').innerText = adjRate.toFixed(4);
                     
-                    document.getElementById('time-display').innerText = '台銀數據同步時間：' + data.time;
+                    document.getElementById('time-display').innerText = '數據同步時間：' + data.time;
                 }
             } catch (e) {
                 document.getElementById('rate-display').innerText = '讀取失敗';
@@ -75,14 +75,8 @@
             const adjustedRate = currentRate - 0.5;
 
             if (val && adjustedRate > 0) {
-                // 1. 原始計算結果
                 const rawRes = parseFloat(val) / adjustedRate;
-                
-                // 2. 無條件進位至小數點第二位
-                // 邏輯：先乘100，進位後再除回100
                 const finalRes = Math.ceil(rawRes * 100) / 100;
-                
-                // 3. 格式化顯示 (強制顯示兩位小數，例如 25.00)
                 document.getElementById('result').innerText = '¥ ' + finalRes.toFixed(2);
             } else {
                 document.getElementById('result').innerText = '¥ 0.00';
