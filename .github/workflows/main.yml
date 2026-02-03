@@ -2,22 +2,25 @@ name: Update Exchange Rate
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '15 * * * *' # 每小時的15分執行，避開整點尖峰
+
 permissions:
   contents: write
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 # 指定穩定版本，避開 ubuntu-latest 的故障
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - name: Install
-        run: pip install requests pandas pytz
-      - name: Run
+      - name: Install dependencies
+        run: pip install requests pytz
+      - name: Run Scraper
         run: python update_rate.py
-      - name: Push
+      - name: Commit and Push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
