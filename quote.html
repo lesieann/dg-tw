@@ -76,7 +76,7 @@
                     <span id="bd-fee" class="font-mono text-orange-600">--</span>
                 </div>
                 <div class="flex justify-between text-slate-700 font-semibold border-t border-slate-200 pt-2">
-                    <span>合計台幣（無條件捨去）</span>
+                    <span>扣除手續費後台幣（無條件捨去）</span>
                     <span id="bd-total-twd" class="font-mono">--</span>
                 </div>
                 <div class="flex justify-between text-slate-600">
@@ -141,7 +141,7 @@
             }
 
             const fee = getFee(raw, method);
-            const totalTwd = Math.floor(raw + fee);
+            const totalTwd = Math.floor(raw - fee);
             const cnyRaw = totalTwd / currentRate;
             const cnyAfterDeduct = cnyRaw * (1 - 0.065);
             const finalCny = Math.floor(cnyAfterDeduct * 100) / 100;
@@ -154,7 +154,7 @@
                 ? `ATM 手續費（1.05%，最低$15）`
                 : `超商手續費（固定）`;
             document.getElementById('bd-fee-label').innerText = feeLabel;
-            document.getElementById('bd-fee').innerText = `+ NT$ ${fee.toFixed(2)}`;
+            document.getElementById('bd-fee').innerText = `- NT$ ${fee.toFixed(2)}`;
 
             document.getElementById('bd-total-twd').innerText = `NT$ ${totalTwd.toLocaleString()}`;
             document.getElementById('bd-rate-val').innerText = currentRate.toFixed(4);
