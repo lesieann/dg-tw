@@ -19,44 +19,47 @@ def fmt(dt):
     return dt.strftime('%Y-%m-%d %H:%M:%S')
 
 
+def first_value_after(cols, label):
+    """回傳 cols 中第一個等於 label 的欄位後面那個數值。"""
+    for i, cell in enumerate(cols):
+        if cell == label and i + 1 < len(cols):
+            return float(cols[i + 1])
+    raise ValueError(f'{label} not found in row: {cols}')
+
+
 def get_bot_rate():
     """台灣銀行牌告匯率 CSV，取人民幣「現金買入/賣出」中間價。
 
-    標題列格式為 幣別,匯率,現金,匯率,即期,遠期...,匯率,現金,匯率,即期,遠期...
-    前半段是本行買入、後半段是本行賣出，所以兩個「現金」欄位分別對應
-    現金買入與現金賣出。用標題定位而非寫死索引，台銀調整欄位也不會抓錯。
+    這個端點沒有標題列，每一列的格式固定為
+        幣別,本行買入,現金買入,本行買入,即期買入,遠期×7,
+             本行賣出,現金賣出,本行賣出,即期賣出,遠期×7
+    因此用「本行買入 / 本行賣出」標籤後面的第一個數值定位現金買賣價，
+    不依賴欄位索引，台銀日後調整欄位也不會抓錯。
     """
     url = "https://rate.bot.com.tw/xrt/flcsv/0/day"
-    response = requests.get(url, timeout=30)
+    response = requests.get(url, timeout=30, headers={'User-Agent': 'Mozilla/5.0 (anvia-rate-bot)'})
     response.raise_for_status()
 
     # 台銀未必在標頭指明編碼，requests 此時會退回 ISO-8859-1 而讓中文變亂碼，
-    # 所以自行嘗試常見編碼，取第一個能解出「現金」的結果
+    # 所以自行嘗試常見編碼，取第一個能解出「本行買入」的結果
     text = ''
     for encoding in ('utf-8', 'big5', 'cp950'):
         try:
             decoded = response.content.decode(encoding)
         except UnicodeDecodeError:
             continue
-        if '現金' in decoded:
+        if '本行買入' in decoded:
             text = decoded
             break
     if not text:
         raise ValueError('BoT CSV could not be decoded as utf-8/big5/cp950')
 
-    lines = text.splitlines()
-    header = [c.strip() for c in lines[0].split(',')]
-    cash_cols = [i for i, name in enumerate(header) if name == '現金']
-    if len(cash_cols) < 2:
-        raise ValueError(f'BoT CSV header unrecognised: {header}')
-    buy_col, sell_col = cash_cols[0], cash_cols[1]
-
-    for line in lines[1:]:
-        cols = line.split(',')
-        if cols and cols[0].strip() == 'CNY':
-            cash_buy = float(cols[buy_col])
-            cash_sell = float(cols[sell_col])
-            # 合理範圍檢查，避免欄位位移或台銀回傳異常值
+    for line in text.splitlines():
+        cols = [c.strip() for c in line.split(',')]
+        if cols and cols[0] == 'CNY':
+            cash_buy = first_value_after(cols, '本行買入')
+            cash_sell = first_value_after(cols, '本行賣出')
+            # 合理範圍檢查，避免台銀改版或回傳異常值
             if not (2 < cash_buy < 10 and 2 < cash_sell < 10 and cash_buy < cash_sell):
                 raise ValueError(f'BoT CNY rate out of range: buy={cash_buy}, sell={cash_sell}')
             now = now_dt()
