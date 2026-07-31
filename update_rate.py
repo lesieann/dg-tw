@@ -30,10 +30,21 @@ def get_bot_rate():
     response = requests.get(url, timeout=30)
     response.raise_for_status()
 
-    lines = response.text.splitlines()
-    if not lines:
-        raise ValueError('BoT CSV is empty')
+    # 台銀未必在標頭指明編碼，requests 此時會退回 ISO-8859-1 而讓中文變亂碼，
+    # 所以自行嘗試常見編碼，取第一個能解出「現金」的結果
+    text = ''
+    for encoding in ('utf-8', 'big5', 'cp950'):
+        try:
+            decoded = response.content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        if '現金' in decoded:
+            text = decoded
+            break
+    if not text:
+        raise ValueError('BoT CSV could not be decoded as utf-8/big5/cp950')
 
+    lines = text.splitlines()
     header = [c.strip() for c in lines[0].split(',')]
     cash_cols = [i for i, name in enumerate(header) if name == '現金']
     if len(cash_cols) < 2:
