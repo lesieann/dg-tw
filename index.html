@@ -48,14 +48,14 @@
         </div>
     </div>
 
+    <script src="rate.js"></script>
     <script>
         let currentRate = 0;
 
         async function init() {
             try {
-                const response = await fetch(`rate.json?t=${new Date().getTime()}`);
-                const data = await response.json();
-                
+                const data = await loadRate();
+
                 if (data.rate) {
                     currentRate = data.rate;
                     document.getElementById('rate-display').innerText = currentRate.toFixed(4);
