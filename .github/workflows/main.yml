@@ -1,11 +1,16 @@
 name: Update Exchange Rate
 on:
-  workflow_dispatch:
+  workflow_dispatch:            # 給外部排程（rate-trigger Worker）呼叫
   schedule:
-    - cron: '15 * * * *' # 每小時的15分執行，避開整點尖峰
+    - cron: '15 * * * *'        # 保留 GitHub 內建排程當備援
 
 permissions:
   contents: write
+
+# 外部排程與內建排程可能同時觸發，排隊依序執行，避免兩個同時 push 而衝突
+concurrency:
+  group: update-rate
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -21,8 +26,22 @@ jobs:
       - name: Run Scraper
         run: python update_rate.py
       - name: Commit and Push
+        id: push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add rate.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update rate" && git push)
+          if git diff --staged --quiet; then
+            echo "rate.json unchanged"
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Update rate"
+            git push
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+          fi
+      # 推上去之後清掉 jsDelivr 的舊快取，網站下次讀到的就是新檔
+      - name: Purge jsDelivr cache
+        if: steps.push.outputs.pushed == 'true'
+        run: |
+          curl -fsS --retry 3 "https://purge.jsdelivr.net/gh/lesieann/dg-tw@main/rate.json" \
+            || echo "jsDelivr purge failed; the site still picks the newest mirror"
