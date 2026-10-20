@@ -28,7 +28,7 @@ def first_value_after(cols, label):
 
 
 def get_bot_rate():
-    """台灣銀行牌告匯率 CSV，取人民幣「現金買入/賣出」中間價。
+    """台灣銀行牌告匯率 CSV，取人民幣「現金買入/賣出」中間價，另存現金買入、賣出價。
 
     這個端點沒有標題列，每一列的格式固定為
         幣別,本行買入,現金買入,本行買入,即期買入,遠期×7,
@@ -66,6 +66,8 @@ def get_bot_rate():
             mid = (cash_buy + cash_sell) / 2
             return {
                 "rate": round(mid, 4),
+                "buy": cash_buy,
+                "sell": cash_sell,
                 "time": fmt(now),
                 "source": "台銀",
                 "rate_date": now.strftime('%Y-%m-%d'),
@@ -99,12 +101,17 @@ def carry_over_bot_rate():
     if age > timedelta(days=MAX_CARRY_OVER_DAYS):
         raise ValueError(f'previous BoT rate too old ({rate_date})')
 
-    return {
-        "rate": prev['rate'],
+    data = {"rate": prev['rate']}
+    # 舊格式沒有買入／賣出價，有才沿用
+    for key in ('buy', 'sell'):
+        if prev.get(key):
+            data[key] = prev[key]
+    data.update({
         "time": fmt(now_dt()),
         "source": "台銀",
         "rate_date": rate_date,
-    }
+    })
+    return data
 
 
 def get_erapi_rate():

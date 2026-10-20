@@ -19,7 +19,7 @@
         <!-- 匯率顯示 -->
         <div class="flex items-center gap-3 mb-6 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
             <div>
-                <p class="text-xs text-slate-400 font-medium">即時匯率 (1 CNY = ? TWD)</p>
+                <p class="text-xs text-slate-400 font-medium">台銀現金賣出匯率 (1 CNY = ? TWD)</p>
                 <p id="rate-display" class="text-2xl font-mono font-bold text-blue-600">載入中...</p>
                 <p id="time-display" class="text-[10px] text-slate-400 italic mt-0.5"></p>
             </div>
@@ -80,7 +80,7 @@
                     <span id="bd-total-twd" class="font-mono">--</span>
                 </div>
                 <div class="flex justify-between text-slate-600">
-                    <span>÷ 匯率（<span id="bd-rate-val">--</span>）</span>
+                    <span>÷ 賣出匯率（<span id="bd-rate-val">--</span>）</span>
                     <span id="bd-cny-raw" class="font-mono">--</span>
                 </div>
                 <div class="flex justify-between text-slate-600">
@@ -108,8 +108,10 @@
         async function init() {
             try {
                 const data = await loadRate();
-                if (data.rate) {
-                    currentRate = data.rate;
+                // 報價用台銀現金賣出價；備援來源沒有賣出價時退回中間價
+                const rate = data.sell || data.rate;
+                if (rate) {
+                    currentRate = rate;
                     document.getElementById('rate-display').innerText = currentRate.toFixed(4);
                     document.getElementById('time-display').innerText = '更新時間：' + data.time;
                     document.getElementById('rate-dot').className = 'inline-block w-2 h-2 rounded-full bg-green-400 mr-1';
