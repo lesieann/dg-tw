@@ -19,21 +19,21 @@ def fmt(dt):
     return dt.strftime('%Y-%m-%d %H:%M:%S')
 
 
-def first_value_after(cols, label):
-    """回傳 cols 中第一個等於 label 的欄位後面那個數值。"""
+def value_after(cols, label, offset=1):
+    """回傳 cols 中第一個等於 label 的欄位後面第 offset 個數值。"""
     for i, cell in enumerate(cols):
-        if cell == label and i + 1 < len(cols):
-            return float(cols[i + 1])
+        if cell == label and i + offset < len(cols):
+            return float(cols[i + offset])
     raise ValueError(f'{label} not found in row: {cols}')
 
 
 def get_bot_rate():
-    """台灣銀行牌告匯率 CSV，取人民幣「現金買入/賣出」中間價，另存現金買入、賣出價。
+    """台灣銀行牌告匯率 CSV，取人民幣「現金買入/賣出」中間價，另存現金與即期的買入、賣出價。
 
     這個端點沒有標題列，每一列的格式固定為
         幣別,本行買入,現金買入,本行買入,即期買入,遠期×7,
              本行賣出,現金賣出,本行賣出,即期賣出,遠期×7
-    因此用「本行買入 / 本行賣出」標籤後面的第一個數值定位現金買賣價，
+    因此用「本行買入 / 本行賣出」標籤後面的第一、第二個數值定位現金、即期買賣價，
     不依賴欄位索引，台銀日後調整欄位也不會抓錯。
     """
     url = "https://rate.bot.com.tw/xrt/flcsv/0/day"
@@ -57,17 +57,23 @@ def get_bot_rate():
     for line in text.splitlines():
         cols = [c.strip() for c in line.split(',')]
         if cols and cols[0] == 'CNY':
-            cash_buy = first_value_after(cols, '本行買入')
-            cash_sell = first_value_after(cols, '本行賣出')
+            cash_buy = value_after(cols, '本行買入')
+            cash_sell = value_after(cols, '本行賣出')
+            spot_buy = value_after(cols, '本行買入', 2)
+            spot_sell = value_after(cols, '本行賣出', 2)
             # 合理範圍檢查，避免台銀改版或回傳異常值
             if not (2 < cash_buy < 10 and 2 < cash_sell < 10 and cash_buy < cash_sell):
                 raise ValueError(f'BoT CNY rate out of range: buy={cash_buy}, sell={cash_sell}')
+            if not (2 < spot_buy < 10 and 2 < spot_sell < 10 and spot_buy < spot_sell):
+                raise ValueError(f'BoT CNY spot rate out of range: buy={spot_buy}, sell={spot_sell}')
             now = now_dt()
             mid = (cash_buy + cash_sell) / 2
             return {
                 "rate": round(mid, 4),
                 "buy": cash_buy,
                 "sell": cash_sell,
+                "spot_buy": spot_buy,
+                "spot_sell": spot_sell,
                 "time": fmt(now),
                 "source": "台銀",
                 "rate_date": now.strftime('%Y-%m-%d'),
@@ -103,7 +109,7 @@ def carry_over_bot_rate():
 
     data = {"rate": prev['rate']}
     # 舊格式沒有買入／賣出價，有才沿用
-    for key in ('buy', 'sell'):
+    for key in ('buy', 'sell', 'spot_buy', 'spot_sell'):
         if prev.get(key):
             data[key] = prev[key]
     data.update({
@@ -112,6 +118,46 @@ def carry_over_bot_rate():
         "rate_date": rate_date,
     })
     return data
+
+
+def get_dbs_rate():
+    """星展銀行（台灣）牌告匯率，取人民幣即期與現金買入、賣出價。
+
+    代購報價用即期賣出價（rate）。星展網站的匯率頁本身就是呼叫這支 API。
+    """
+    url = "https://www.dbs.com.tw/tw-rates-api/v1/api/twrates/latestForexRates"
+    response = requests.get(url, timeout=30, headers={
+        'User-Agent': 'Mozilla/5.0 (anvia-rate-bot)',
+        'Referer': 'https://www.dbs.com.tw/personal-zh/rates/foreign-exchange-rates.page',
+    })
+    response.raise_for_status()
+    data = response.json()
+
+    rows = [row for asset in data['results']['assets'] for row in asset['recData']]
+    cny = next((row for row in rows if row.get('currency') == 'CNY'), None)
+    if not cny:
+        raise ValueError('CNY not found in DBS rates')
+
+    tt_buy = float(cny['ttBuy'])
+    tt_sell = float(cny['ttSell'])
+    if not (2 < tt_buy < 10 and 2 < tt_sell < 10 and tt_buy < tt_sell):
+        raise ValueError(f'DBS CNY rate out of range: buy={tt_buy}, sell={tt_sell}')
+
+    result = {
+        "rate": tt_sell,
+        "tt_buy": tt_buy,
+        "tt_sell": tt_sell,
+    }
+    # 現金價有時不提供（null），有才記錄
+    for key, field in (('cash_buy', 'cashBuy'), ('cash_sell', 'cashSell')):
+        if cny.get(field):
+            result[key] = float(cny[field])
+    result.update({
+        "time": fmt(now_dt()),
+        "quote_time": data.get('lastUpdatedDateAndTime') or '',
+        "source": "星展",
+    })
+    return result
 
 
 def get_erapi_rate():
@@ -141,6 +187,23 @@ for label, getter in (
         break
     except Exception as e:
         print(f'{label} unavailable: {e}')
+
+# 星展另外存在 dbs 欄位，原本的台銀欄位維持不變（dg-tw 自己的頁面與閑魚代售仍用台銀）。
+# 星展取不到時沿用上一次的星展資料，time 保持上次成功的時間，
+# 網站依 time 判斷是否過期，過期就改用台銀即期賣出價。
+try:
+    dbs = get_dbs_rate()
+except Exception as e:
+    print(f'DBS unavailable: {e}')
+    dbs = None
+    try:
+        with open('rate.json', encoding='utf-8') as f:
+            dbs = json.load(f).get('dbs')
+    except (OSError, ValueError):
+        pass
+
+if data and dbs:
+    data['dbs'] = dbs
 
 if data:
     with open('rate.json', 'w', encoding='utf-8') as f:
